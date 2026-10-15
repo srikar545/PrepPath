@@ -1,3 +1,4 @@
+
 package com.preppath.preppath.service;
 
 import com.preppath.preppath.entity.Topic;
@@ -17,6 +18,7 @@ public class TopicService {
     }
 
     public Topic createTopic(Topic topic) {
+        topic.setId(null);
         return topicRepository.save(topic);
     }
 
@@ -39,6 +41,9 @@ public class TopicService {
     }
 
     public void deleteTopic(Long id) {
-        topicRepository.deleteById(id);
+        Topic existingTopic = topicRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Topic not found"));
+
+        topicRepository.delete(existingTopic);
     }
 }
