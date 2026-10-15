@@ -849,3 +849,40 @@ textarea:focus-visible {
     animation-duration: 0.01ms !important;
   }
 }
+
+
+.topic-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.topic-actions .secondary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 7px 10px;
+  font-size: 12px;
+}
+
+.topic-actions .secondary-button:hover {
+  border-color: #a5b4fc;
+  color: #4338ca;
+}
+
+.topic-actions button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (max-width: 480px) {
+  .topic-actions {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .topic-actions .secondary-button {
+    padding: 6px;
+  }
+}

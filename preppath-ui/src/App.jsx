@@ -15,6 +15,8 @@ import {
   Flame,
   Menu,
   X,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 import "./App.css";
 
@@ -28,6 +30,10 @@ function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [topicName, setTopicName] = useState("");
   const [description, setDescription] = useState("");
+  const [editingTopic, setEditingTopic] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
 
   async function loadTopics() {
     setLoading(true);
@@ -42,7 +48,7 @@ function App() {
 
       const data = await response.json();
       setTopics(Array.isArray(data) ? data : []);
-    } catch (err) {
+    } catch {
       setError("Could not connect to PrepPath backend.");
     } finally {
       setLoading(false);
@@ -53,35 +59,134 @@ function App() {
     loadTopics();
   }, []);
 
-  async function addTopic(event) {
+  function resetForm() {
+    setShowForm(false);
+    setEditingTopic(null);
+    setTopicName("");
+    setDescription("");
+    setError("");
+  }
+
+  function openAddForm() {
+    setEditingTopic(null);
+    setTopicName("");
+    setDescription("");
+    setError("");
+    setShowForm(true);
+  }
+
+  function startEditing(topic) {
+    setEditingTopic(topic);
+    setTopicName(topic.name);
+    setDescription(topic.description || "");
+    setError("");
+    setShowForm(true);
+
+    document
+      .getElementById("subjects")
+      ?.scrollIntoView({ behavior: "smooth" });
+  }
+
+  async function saveTopic(event) {
     event.preventDefault();
+
+    const name = topicName.trim();
+    const topicDescription = description.trim();
+
+    if (!name) {
+      setError("Please enter a topic name.");
+      return;
+    }
+
+    setSaving(true);
     setError("");
 
     try {
-      const response = await fetch(API_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: topicName,
-          description,
-        }),
+      const isEditing = Boolean(editingTopic);
+
+      const response = await fetch(
+        isEditing ? `${API_URL}/${editingTopic.id}` : API_URL,
+        {
+          method: isEditing ? "PUT" : "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name,
+            description: topicDescription,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`API returned ${response.status}`);
+      }
+
+      const savedTopic = await response.json();
+
+      if (isEditing) {
+        setTopics((current) =>
+          current.map((topic) =>
+            topic.id === savedTopic.id ? savedTopic : topic
+          )
+        );
+      } else {
+        setTopics((current) => [...current, savedTopic]);
+      }
+
+      resetForm();
+    } catch {
+      setError(
+        editingTopic
+          ? "Unable to update the topic. Please try again."
+          : "Unable to save the topic. Check the backend connection."
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deleteTopic(topic) {
+    const confirmed = window.confirm(
+      `Are you sure you want to delete "${topic.name}"?`
+    );
+
+    if (!confirmed) return;
+
+    setDeletingId(topic.id);
+    setError("");
+
+    try {
+      const response = await fetch(`${API_URL}/${topic.id}`, {
+        method: "DELETE",
       });
 
       if (!response.ok) {
         throw new Error(`API returned ${response.status}`);
       }
 
-      const createdTopic = await response.json();
-      setTopics((current) => [...current, createdTopic]);
-      setTopicName("");
-      setDescription("");
-      setShowForm(false);
-    } catch (err) {
-      setError(
-        "Unable to save the topic. Check the backend and API configuration."
+      setTopics((current) =>
+        current.filter((item) => item.id !== topic.id)
       );
+
+      if (editingTopic?.id === topic.id) {
+        resetForm();
+      }
+    } catch {
+      setError("Unable to delete the topic. Please try again.");
+    } finally {
+      setDeletingId(null);
     }
   }
+
+  const filteredTopics = topics.filter((topic) => {
+    const query = searchQuery.trim().toLowerCase();
+
+    return (
+      topic.name.toLowerCase().includes(query) ||
+      (topic.description || "").toLowerCase().includes(query)
+    );
+  });
 
   const navItems = [
     { label: "Dashboard", icon: LayoutDashboard },
@@ -99,6 +204,7 @@ function App() {
             <h2>PrepPath</h2>
             <span>YOUR EXAM COMPANION</span>
           </div>
+
           <button
             className="icon-button mobile-close"
             onClick={() => setMenuOpen(false)}
@@ -109,6 +215,7 @@ function App() {
         </div>
 
         <div className="nav-caption">WORKSPACE</div>
+
         <nav className="nav-list">
           {navItems.map(({ label, icon: Icon }, index) => (
             <button
@@ -116,24 +223,37 @@ function App() {
               className={`nav-item ${index === 0 ? "active" : ""}`}
               onClick={() => {
                 setMenuOpen(false);
+
                 if (index === 1) {
                   document
                     .getElementById("subjects")
                     ?.scrollIntoView({ behavior: "smooth" });
                 } else if (index === 2 || index === 3) {
-                  setError(`${label} will be available in a later phase.`);
+                  setError(
+                    `${label} will be available in a later phase.`
+                  );
+                } else {
+                  window.scrollTo({ top: 0, behavior: "smooth" });
                 }
               }}
             >
               <Icon size={19} />
               <span>{label}</span>
-              {index === 2 && <span className="nav-badge">Soon</span>}
+              {index === 2 && (
+                <span className="nav-badge">Soon</span>
+              )}
             </button>
           ))}
         </nav>
 
         <div className="nav-caption tools-caption">PREFERENCES</div>
-        <button className="nav-item" onClick={() => setError("Settings will be added in a later phase.")}>
+
+        <button
+          className="nav-item"
+          onClick={() =>
+            setError("Settings will be added in a later phase.")
+          }
+        >
           <Settings size={19} />
           <span>Settings</span>
         </button>
@@ -146,6 +266,7 @@ function App() {
             <strong>Small steps. Big results.</strong>
             <p>Build a consistent study habit, one day at a time.</p>
           </div>
+
           <div className="profile">
             <div className="avatar">S</div>
             <div className="profile-info">
@@ -174,16 +295,30 @@ function App() {
           >
             <Menu size={21} />
           </button>
+
           <div className="breadcrumb">
             Workspace <span>/</span> <strong>Dashboard</strong>
           </div>
+
           <div className="topbar-actions">
             <label className="search-box">
               <Search size={17} />
-              <input placeholder="Search topics..." aria-label="Search topics" />
-              <kbd>⌘ K</kbd>
+              <input
+                placeholder="Search topics..."
+                aria-label="Search topics"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+              />
+              <kbd>Ctrl K</kbd>
             </label>
-            <button className="icon-button notification" aria-label="Notifications">
+
+            <button
+              className="icon-button notification"
+              aria-label="Notifications"
+              onClick={() =>
+                setError("You have no new notifications.")
+              }
+            >
               <Bell size={19} />
               <span />
             </button>
@@ -194,11 +329,16 @@ function App() {
           <section className="welcome-row">
             <div>
               <div className="eyebrow">
-                <span className="status-dot" /> YOUR LEARNING SPACE
+                <span className="status-dot" />
+                YOUR LEARNING SPACE
               </div>
               <h1>Let's make today count.</h1>
-              <p>Build your knowledge, track your progress, and prepare with purpose.</p>
+              <p>
+                Build your knowledge, track your progress, and prepare
+                with purpose.
+              </p>
             </div>
+
             <div className="date-label">
               <Clock3 size={16} />
               Your preparation starts here
@@ -206,9 +346,12 @@ function App() {
           </section>
 
           {error && (
-            <div className="message-banner" role="status">
-              {error}
-              <button onClick={() => setError("")} aria-label="Dismiss">
+            <div className="message-banner" role="alert">
+              <span>{error}</span>
+              <button
+                onClick={() => setError("")}
+                aria-label="Dismiss message"
+              >
                 <X size={16} />
               </button>
             </div>
@@ -218,34 +361,49 @@ function App() {
             <article className="stat-card">
               <div className="stat-top">
                 <span>Total topics</span>
-                <div className="stat-icon blue"><BookOpen size={19} /></div>
+                <div className="stat-icon blue">
+                  <BookOpen size={19} />
+                </div>
               </div>
               <div className="stat-value">{topics.length}</div>
               <div className="stat-foot">Topics in your library</div>
             </article>
+
             <article className="stat-card">
               <div className="stat-top">
                 <span>Study sessions</span>
-                <div className="stat-icon purple"><Clock3 size={19} /></div>
+                <div className="stat-icon purple">
+                  <Clock3 size={19} />
+                </div>
               </div>
               <div className="stat-value">0</div>
               <div className="stat-foot">Sessions recorded so far</div>
             </article>
+
             <article className="stat-card">
               <div className="stat-top">
                 <span>Test accuracy</span>
-                <div className="stat-icon green"><Target size={19} /></div>
+                <div className="stat-icon green">
+                  <Target size={19} />
+                </div>
               </div>
               <div className="stat-value">—</div>
-              <div className="stat-foot">Available after your first test</div>
+              <div className="stat-foot">
+                Available after your first test
+              </div>
             </article>
+
             <article className="stat-card">
               <div className="stat-top">
                 <span>Study streak</span>
-                <div className="stat-icon orange"><Flame size={19} /></div>
+                <div className="stat-icon orange">
+                  <Flame size={19} />
+                </div>
               </div>
               <div className="stat-value">0 days</div>
-              <div className="stat-foot">Start building your routine</div>
+              <div className="stat-foot">
+                Start building your routine
+              </div>
             </article>
           </section>
 
@@ -255,43 +413,74 @@ function App() {
                 <h2>Your subjects &amp; topics</h2>
                 <p>Organize what you need to learn.</p>
               </div>
-              <button className="primary-button" onClick={() => setShowForm(!showForm)}>
+
+              <button
+                className="primary-button"
+                onClick={() => {
+                  if (showForm && !editingTopic) {
+                    resetForm();
+                  } else {
+                    openAddForm();
+                  }
+                }}
+              >
                 <Plus size={17} />
                 Add topic
               </button>
             </div>
 
             {showForm && (
-              <form className="topic-form" onSubmit={addTopic}>
-                <h3>Add a new topic</h3>
+              <form className="topic-form" onSubmit={saveTopic}>
+                <h3>
+                  {editingTopic ? "Edit topic" : "Add a new topic"}
+                </h3>
+
                 <label>
                   Topic name
                   <input
                     value={topicName}
-                    onChange={(event) => setTopicName(event.target.value)}
+                    onChange={(event) =>
+                      setTopicName(event.target.value)
+                    }
                     placeholder="e.g. Indian Polity"
+                    maxLength={150}
                     required
                   />
                 </label>
+
                 <label>
                   Description
                   <textarea
                     value={description}
-                    onChange={(event) => setDescription(event.target.value)}
+                    onChange={(event) =>
+                      setDescription(event.target.value)
+                    }
                     placeholder="What will you study?"
                     rows={3}
+                    maxLength={1000}
                   />
                 </label>
+
                 <div className="form-actions">
                   <button
                     type="button"
                     className="secondary-button"
-                    onClick={() => setShowForm(false)}
+                    onClick={resetForm}
+                    disabled={saving}
                   >
                     Cancel
                   </button>
-                  <button type="submit" className="primary-button">
-                    Save topic
+
+                  <button
+                    type="submit"
+                    className="primary-button"
+                    disabled={saving}
+                  >
+                    {saving
+                      ? "Saving..."
+                      : editingTopic
+                        ? "Update topic"
+                        : "Save topic"}
                   </button>
                 </div>
               </form>
@@ -301,26 +490,84 @@ function App() {
               <div className="empty-state">Loading your topics...</div>
             ) : topics.length === 0 ? (
               <div className="empty-state">
-                <div className="empty-icon"><BookOpen size={26} /></div>
+                <div className="empty-icon">
+                  <BookOpen size={26} />
+                </div>
                 <h3>Your learning library is empty</h3>
-                <p>Add your first topic to begin building your study plan.</p>
-                <button className="primary-button" onClick={() => setShowForm(true)}>
-                  <Plus size={17} /> Create your first topic
+                <p>
+                  Add your first topic to begin building your study plan.
+                </p>
+                <button
+                  className="primary-button"
+                  onClick={openAddForm}
+                >
+                  <Plus size={17} />
+                  Create your first topic
+                </button>
+              </div>
+            ) : filteredTopics.length === 0 ? (
+              <div className="empty-state">
+                <div className="empty-icon">
+                  <Search size={26} />
+                </div>
+                <h3>No topics found</h3>
+                <p>Try a different topic name or description.</p>
+                <button
+                  className="secondary-button"
+                  onClick={() => setSearchQuery("")}
+                >
+                  Clear search
                 </button>
               </div>
             ) : (
               <div className="topics-grid">
-                {topics.map((topic) => (
+                {filteredTopics.map((topic) => (
                   <article className="topic-card" key={topic.id}>
                     <div className="topic-card-top">
-                      <div className="topic-symbol"><BookOpen size={21} /></div>
-                      <ArrowUpRight size={18} className="topic-arrow" />
+                      <div className="topic-symbol">
+                        <BookOpen size={21} />
+                      </div>
+                      <ArrowUpRight
+                        size={18}
+                        className="topic-arrow"
+                      />
                     </div>
+
                     <h3>{topic.name}</h3>
-                    <p>{topic.description || "No description added yet."}</p>
+                    <p>
+                      {topic.description || "No description added yet."}
+                    </p>
+
                     <div className="topic-card-footer">
                       <span>Study topic</span>
-                      <span className="topic-status">Added</span>
+
+                      <div className="topic-actions">
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          onClick={() => startEditing(topic)}
+                          aria-label={`Edit ${topic.name}`}
+                          disabled={saving || deletingId !== null}
+                        >
+                          <Pencil size={14} />
+                          Edit
+                        </button>
+
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          onClick={() => deleteTopic(topic)}
+                          aria-label={`Delete ${topic.name}`}
+                          disabled={
+                            saving || deletingId !== null
+                          }
+                        >
+                          <Trash2 size={14} />
+                          {deletingId === topic.id
+                            ? "Deleting..."
+                            : "Delete"}
+                        </button>
+                      </div>
                     </div>
                   </article>
                 ))}
