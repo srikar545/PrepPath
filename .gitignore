@@ -1,0 +1,33 @@
+
+# Java / Maven
+preppath/target/
+preppath/.mvn/wrapper/maven-wrapper.jar
+
+# Application secrets and local configuration
+preppath/src/main/resources/application-local.properties
+preppath/src/main/resources/application-local.yml
+preppath/src/main/resources/application-local.yaml
+preppath/src/main/resources/application-secrets.properties
+preppath/src/main/resources/application-secrets.yml
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# React / Vite
+preppath-ui/node_modules/
+preppath-ui/dist/
+preppath-ui/.vite/
+
+# Logs
+*.log
+
+# IDE files
+.idea/
+.vscode/
+*.iml
+
+# Operating system files
+.DS_Store
+Thumbs.db
